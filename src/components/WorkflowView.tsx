@@ -588,11 +588,11 @@ export default function WorkflowView() {
                 <div className="font-mono text-[10px] tracking-wider text-muted mb-2">RELATED FLASHCARDS</div>
                 <div className="space-y-1">
                   {currentExam.flashcards
-                    .filter((f) => f.topic?.toLowerCase().includes(selectedNode.label.toLowerCase().split(" ")[0]))
+                    .filter((f) => f.front?.toLowerCase().includes(selectedNode.label.toLowerCase().split(" ")[0]))
                     .slice(0, 3)
                     .map((f, i) => (
                       <div key={i} className="font-mono text-xs text-muted/70 truncate">
-                        Q: {f.question}
+                        Q: {f.front}
                       </div>
                     ))}
                 </div>
