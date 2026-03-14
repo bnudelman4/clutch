@@ -50,7 +50,7 @@ export async function POST(req: NextRequest) {
       .join("\n") || "General review";
 
     const response = await client.messages.create({
-      model: "claude-3-5-haiku-20241022",
+      model: "claude-sonnet-4-20250514",
       max_tokens: 8192,
       system: SYSTEM_PROMPT,
       messages: [
@@ -74,6 +74,16 @@ export async function POST(req: NextRequest) {
       rawText = rawText.replace(/^```(?:json)?\s*/, "").replace(/\s*```$/, "");
     }
     const parsed = JSON.parse(rawText);
+
+    // Filter out any sessions scheduled in the past
+    const now = new Date();
+    if (parsed.sessions) {
+      parsed.sessions = parsed.sessions.filter((s: { date: string; startTime: string }) => {
+        const sessionStart = new Date(`${s.date}T${s.startTime}`);
+        return sessionStart > now;
+      });
+    }
+
     return NextResponse.json(parsed);
   } catch (error: unknown) {
     console.error("Calendar plan error:", error);

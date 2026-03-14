@@ -33,13 +33,13 @@ CRITICAL: Return ONLY a JSON object, no markdown, no backticks:
   }]
 }`;
 
-// Sonnet has much higher rate limits — allow up to ~50k chars
-const MAX_TEXT_CHARS = 50000;
+// Sonnet supports large context — allow up to 100k chars
+const MAX_TEXT_CHARS = 100000;
 
 function truncateText(text: string): string {
   if (text.length <= MAX_TEXT_CHARS) return text;
-  const head = text.substring(0, 35000);
-  const tail = text.substring(text.length - 15000);
+  const head = text.substring(0, 70000);
+  const tail = text.substring(text.length - 30000);
   return `${head}\n\n[... content truncated for length ...]\n\n${tail}`;
 }
 
@@ -79,7 +79,7 @@ export async function POST(req: NextRequest) {
     }
 
     const response = await client.messages.create({
-      model: "claude-3-5-haiku-20241022",
+      model: "claude-sonnet-4-20250514",
       max_tokens: 8192,
       system: SYSTEM_PROMPT,
       messages: [{ role: "user", content: userContent }],
