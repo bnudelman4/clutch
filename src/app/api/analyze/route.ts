@@ -1,7 +1,27 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { NextRequest, NextResponse } from "next/server";
+import { getDocument, GlobalWorkerOptions } from "pdfjs-dist/legacy/build/pdf.mjs";
+
+// Disable worker for server-side usage
+GlobalWorkerOptions.workerSrc = "";
 
 const client = new Anthropic();
+
+async function extractPdfText(base64: string): Promise<string> {
+  const data = Buffer.from(base64, "base64");
+  const doc = await getDocument({ data }).promise;
+  const pages: string[] = [];
+  for (let i = 1; i <= doc.numPages; i++) {
+    const page = await doc.getPage(i);
+    const content = await page.getTextContent();
+    const text = content.items
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      .map((item: any) => (item.str as string) || "")
+      .join(" ");
+    if (text.trim()) pages.push(`[Page ${i}]\n${text}`);
+  }
+  return pages.join("\n\n");
+}
 
 const SYSTEM_PROMPT = `You are an Academic Intelligence Engine. Analyze the provided study material.
 1. Identify core topics based on heading density, repetition, and weighting. For each topic, identify 2-4 subtopics with importance levels.
@@ -24,6 +44,17 @@ CRITICAL: Return ONLY a JSON object, no markdown, no backticks:
   }]
 }`;
 
+// ~6000 chars ≈ ~2000 tokens, leaves room for system prompt under 10k limit
+const MAX_TEXT_CHARS = 6000;
+
+function truncateText(text: string): string {
+  if (text.length <= MAX_TEXT_CHARS) return text;
+  // Take first 4000 and last 2000 chars to capture intro + conclusion
+  const head = text.substring(0, 4000);
+  const tail = text.substring(text.length - 2000);
+  return `${head}\n\n[... content truncated for length ...]\n\n${tail}`;
+}
+
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
@@ -32,25 +63,24 @@ export async function POST(req: NextRequest) {
     let userContent: Anthropic.Messages.ContentBlockParam[];
 
     if (fileBase64 && fileType === "application/pdf") {
+      const extractedText = await extractPdfText(fileBase64);
+      if (!extractedText.trim()) {
+        return NextResponse.json(
+          { error: "Could not extract text from PDF. It may be image-only." },
+          { status: 400 }
+        );
+      }
       userContent = [
         {
-          type: "document",
-          source: {
-            type: "base64",
-            media_type: "application/pdf",
-            data: fileBase64,
-          },
-        },
-        {
           type: "text",
-          text: `Analyze this PDF document: "${fileName || "uploaded document"}"`,
+          text: `Analyze this study material (${fileName || "PDF"}):\n\n${truncateText(extractedText)}`,
         },
       ];
     } else if (text) {
       userContent = [
         {
           type: "text",
-          text: `Analyze this study material:\n\n${text}`,
+          text: `Analyze this study material:\n\n${truncateText(text)}`,
         },
       ];
     } else {

@@ -50,16 +50,16 @@ export default function UploadView() {
           const blobUrl = URL.createObjectURL(item.file);
           addFileToExam(currentExam.id, { name: item.file.name, blobUrl, type: item.file.type });
 
-          const arrayBuffer = await item.file.arrayBuffer();
-          const base64 = btoa(
-            new Uint8Array(arrayBuffer).reduce(
-              (data, byte) => data + String.fromCharCode(byte),
-              ""
-            )
-          );
-
           let body: Record<string, string>;
           if (item.file.type === "application/pdf") {
+            // Send base64 to server for text extraction + analysis
+            const arrayBuffer = await item.file.arrayBuffer();
+            const base64 = btoa(
+              new Uint8Array(arrayBuffer).reduce(
+                (data, byte) => data + String.fromCharCode(byte),
+                ""
+              )
+            );
             body = { fileBase64: base64, fileType: item.file.type, fileName: item.file.name };
           } else {
             const text = await item.file.text();

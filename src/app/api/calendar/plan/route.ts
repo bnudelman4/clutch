@@ -55,7 +55,7 @@ export async function POST(req: NextRequest) {
       messages: [
         {
           role: "user",
-          content: `Existing calendar events (DO NOT schedule over these):\n${JSON.stringify(events || [])}\n\nExam: ${examSubject} on ${examDateTime}\n\nTopics to cover (by priority):\n${topicsList}`,
+          content: `Existing calendar events (DO NOT schedule over these):\n${JSON.stringify((events || []).slice(0, 30).map((e: { summary?: string; start?: { dateTime?: string; date?: string }; end?: { dateTime?: string; date?: string } }) => ({ summary: e.summary, start: e.start, end: e.end })))}\n\nExam: ${examSubject} on ${examDateTime}\n\nTopics to cover (by priority):\n${topicsList}`,
         },
       ],
     });
