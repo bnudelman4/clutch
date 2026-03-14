@@ -23,7 +23,7 @@ export async function POST(req: NextRequest) {
     }
 
     const response = await client.messages.create({
-      model: "claude-haiku-4-5-20251001",
+      model: "claude-sonnet-4-20250514",
       max_tokens: 2048,
       system: SYSTEM_PROMPT,
       messages: [
@@ -42,7 +42,11 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const parsed = JSON.parse(textBlock.text);
+    let rawText = textBlock.text.trim();
+    if (rawText.startsWith("```")) {
+      rawText = rawText.replace(/^```(?:json)?\s*/, "").replace(/\s*```$/, "");
+    }
+    const parsed = JSON.parse(rawText);
     return NextResponse.json(parsed);
   } catch (error: unknown) {
     console.error("Workflow error:", error);

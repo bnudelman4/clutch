@@ -6,6 +6,7 @@ const client = new Anthropic();
 const SYSTEM_PROMPT = `You are an academic study planner. Given calendar events, exam details, and topics with complexity scores, create an optimal study schedule.
 
 CONSTRAINTS:
+- CRITICAL: Only schedule sessions AFTER the current time provided. Never schedule sessions in the past.
 - Sessions start no earlier than 10:00 AM, end no later than 11:00 PM
 - Skip any block already occupied by an existing event (check for overlap)
 - Minimum session length: 30 minutes
@@ -49,13 +50,13 @@ export async function POST(req: NextRequest) {
       .join("\n") || "General review";
 
     const response = await client.messages.create({
-      model: "claude-haiku-4-5-20251001",
+      model: "claude-sonnet-4-20250514",
       max_tokens: 4096,
       system: SYSTEM_PROMPT,
       messages: [
         {
           role: "user",
-          content: `Existing calendar events (DO NOT schedule over these):\n${JSON.stringify((events || []).slice(0, 30).map((e: { summary?: string; start?: { dateTime?: string; date?: string }; end?: { dateTime?: string; date?: string } }) => ({ summary: e.summary, start: e.start, end: e.end })))}\n\nExam: ${examSubject} on ${examDateTime}\n\nTopics to cover (by priority):\n${topicsList}`,
+          content: `Current date/time: ${new Date().toISOString()}\n\nExisting calendar events (DO NOT schedule over these):\n${JSON.stringify((events || []).slice(0, 30).map((e: { summary?: string; start?: { dateTime?: string; date?: string }; end?: { dateTime?: string; date?: string } }) => ({ summary: e.summary, start: e.start, end: e.end })))}\n\nExam: ${examSubject} on ${examDateTime}\n\nTopics to cover (by priority):\n${topicsList}`,
         },
       ],
     });
@@ -68,7 +69,11 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const parsed = JSON.parse(textBlock.text);
+    let rawText = textBlock.text.trim();
+    if (rawText.startsWith("```")) {
+      rawText = rawText.replace(/^```(?:json)?\s*/, "").replace(/\s*```$/, "");
+    }
+    const parsed = JSON.parse(rawText);
     return NextResponse.json(parsed);
   } catch (error: unknown) {
     console.error("Calendar plan error:", error);

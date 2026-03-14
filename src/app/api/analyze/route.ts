@@ -1,26 +1,15 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { NextRequest, NextResponse } from "next/server";
-import { getDocument, GlobalWorkerOptions } from "pdfjs-dist/legacy/build/pdf.mjs";
-
-// Disable worker for server-side usage
-GlobalWorkerOptions.workerSrc = "";
+// Use require to avoid webpack bundling issues
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const pdfParse = require("pdf-parse");
 
 const client = new Anthropic();
 
 async function extractPdfText(base64: string): Promise<string> {
-  const data = Buffer.from(base64, "base64");
-  const doc = await getDocument({ data }).promise;
-  const pages: string[] = [];
-  for (let i = 1; i <= doc.numPages; i++) {
-    const page = await doc.getPage(i);
-    const content = await page.getTextContent();
-    const text = content.items
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      .map((item: any) => (item.str as string) || "")
-      .join(" ");
-    if (text.trim()) pages.push(`[Page ${i}]\n${text}`);
-  }
-  return pages.join("\n\n");
+  const buffer = Buffer.from(base64, "base64");
+  const result = await pdfParse(buffer);
+  return result.text;
 }
 
 const SYSTEM_PROMPT = `You are an Academic Intelligence Engine. Analyze the provided study material.
@@ -44,14 +33,13 @@ CRITICAL: Return ONLY a JSON object, no markdown, no backticks:
   }]
 }`;
 
-// ~6000 chars ≈ ~2000 tokens, leaves room for system prompt under 10k limit
-const MAX_TEXT_CHARS = 6000;
+// Sonnet has much higher rate limits — allow up to ~50k chars
+const MAX_TEXT_CHARS = 50000;
 
 function truncateText(text: string): string {
   if (text.length <= MAX_TEXT_CHARS) return text;
-  // Take first 4000 and last 2000 chars to capture intro + conclusion
-  const head = text.substring(0, 4000);
-  const tail = text.substring(text.length - 2000);
+  const head = text.substring(0, 35000);
+  const tail = text.substring(text.length - 15000);
   return `${head}\n\n[... content truncated for length ...]\n\n${tail}`;
 }
 
@@ -91,7 +79,7 @@ export async function POST(req: NextRequest) {
     }
 
     const response = await client.messages.create({
-      model: "claude-haiku-4-5-20251001",
+      model: "claude-sonnet-4-20250514",
       max_tokens: 4096,
       system: SYSTEM_PROMPT,
       messages: [{ role: "user", content: userContent }],
@@ -105,7 +93,12 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const parsed = JSON.parse(textBlock.text);
+    let rawText = textBlock.text.trim();
+    // Strip markdown code fences if present
+    if (rawText.startsWith("```")) {
+      rawText = rawText.replace(/^```(?:json)?\s*/, "").replace(/\s*```$/, "");
+    }
+    const parsed = JSON.parse(rawText);
     return NextResponse.json(parsed);
   } catch (error: unknown) {
     console.error("Analyze error:", error);
