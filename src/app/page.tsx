@@ -2,6 +2,7 @@
 
 import { useReducer } from "react";
 import { AppContext, appReducer, initialState } from "@/lib/store";
+import { ExamProvider } from "@/lib/exam-context";
 import Sidebar from "@/components/Sidebar";
 import UploadView from "@/components/UploadView";
 import ContentView from "@/components/ContentView";
@@ -16,18 +17,20 @@ export default function Home() {
 
   return (
     <AppContext.Provider value={{ state, dispatch }}>
-      <div className="flex h-screen overflow-hidden bg-bg">
-        <Sidebar />
-        <main className="flex-1 overflow-hidden flex">
-          {state.view === "upload" && <UploadView />}
-          {state.view === "content" && <ContentView />}
-          {state.view === "ledger" && <TopicLedger />}
-          {state.view === "flashcards" && <Flashcards />}
-          {state.view === "audit" && <PreFlightAudit />}
-          {state.view === "workflow" && <WorkflowView />}
-          {state.view === "calendar" && <CalendarView />}
-        </main>
-      </div>
+      <ExamProvider>
+        <div className="flex h-screen overflow-hidden bg-bg">
+          <Sidebar />
+          <main className="flex-1 overflow-hidden flex">
+            {state.view === "calendar" && <CalendarView />}
+            {state.view === "upload" && <UploadView />}
+            {state.view === "content" && <ContentView />}
+            {state.view === "ledger" && <TopicLedger />}
+            {state.view === "flashcards" && <Flashcards />}
+            {state.view === "audit" && <PreFlightAudit />}
+            {state.view === "workflow" && <WorkflowView />}
+          </main>
+        </div>
+      </ExamProvider>
     </AppContext.Provider>
   );
 }

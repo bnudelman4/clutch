@@ -3,7 +3,10 @@ import { NextRequest, NextResponse } from "next/server";
 export async function GET(req: NextRequest) {
   const code = req.nextUrl.searchParams.get("code");
   if (!code) {
-    return NextResponse.redirect(new URL("/?error=no_code", req.url));
+    return new NextResponse(
+      `<html><body><script>window.opener?.postMessage({type:"oauth_error",error:"no_code"},"*");window.close();</script></body></html>`,
+      { headers: { "Content-Type": "text/html" } }
+    );
   }
 
   const redirectUri = `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/api/calendar/auth/callback`;
@@ -25,14 +28,21 @@ export async function GET(req: NextRequest) {
 
     if (!tokenRes.ok) {
       console.error("Token exchange failed:", tokenData);
-      return NextResponse.redirect(new URL("/?error=token_failed", req.url));
+      return new NextResponse(
+        `<html><body><script>window.opener?.postMessage({type:"oauth_error",error:"token_failed"},"*");window.close();</script></body></html>`,
+        { headers: { "Content-Type": "text/html" } }
+      );
     }
 
-    const appUrl = new URL("/", req.url);
-    appUrl.searchParams.set("google_token", tokenData.access_token);
-    return NextResponse.redirect(appUrl);
+    return new NextResponse(
+      `<html><body><script>window.opener?.postMessage({type:"oauth_success",token:"${tokenData.access_token}"},"*");window.close();</script></body></html>`,
+      { headers: { "Content-Type": "text/html" } }
+    );
   } catch (error) {
     console.error("OAuth callback error:", error);
-    return NextResponse.redirect(new URL("/?error=oauth_failed", req.url));
+    return new NextResponse(
+      `<html><body><script>window.opener?.postMessage({type:"oauth_error",error:"oauth_failed"},"*");window.close();</script></body></html>`,
+      { headers: { "Content-Type": "text/html" } }
+    );
   }
 }

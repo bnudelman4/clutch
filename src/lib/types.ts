@@ -35,13 +35,13 @@ export interface AnalysisResult {
 }
 
 export type View =
+  | "calendar"
   | "upload"
   | "content"
   | "ledger"
   | "flashcards"
   | "audit"
-  | "workflow"
-  | "calendar";
+  | "workflow";
 
 export interface AuditScore {
   questionIndex: number;
@@ -72,6 +72,8 @@ export interface WorkflowResult {
 }
 
 export interface StudySession {
+  id: string;
+  examId: string;
   date: string;
   startTime: string;
   endTime: string;
@@ -81,16 +83,48 @@ export interface StudySession {
   notes: string;
 }
 
-export interface CalendarPlan {
-  studySessions: StudySession[];
-  summary: string;
-  totalStudyHours: number;
-  daysUntilExam: number;
-}
-
 export interface GoogleEvent {
   id: string;
   summary: string;
   start: { dateTime?: string; date?: string };
   end: { dateTime?: string; date?: string };
 }
+
+export const EXAM_COLORS = [
+  "#00ff88",
+  "#00aaff",
+  "#ff6b35",
+  "#ff3366",
+  "#aa44ff",
+  "#ffcc00",
+  "#00ffcc",
+];
+
+export const EXAM_TYPES = [
+  "Prelim 1",
+  "Prelim 2",
+  "Midterm",
+  "Final",
+  "Quiz",
+  "Other",
+] as const;
+
+export interface Exam {
+  id: string;
+  subjectName: string;
+  examType: string;
+  examDateTime: string;
+  color: string;
+  topics: Topic[];
+  flashcards: Flashcard[];
+  auditQuestions: AuditQuestion[];
+  uploadedFiles: UploadedFile[];
+  auditScores: AuditScore[];
+  workflowResult: WorkflowResult | null;
+  studySessions: StudySession[];
+}
+
+export type SuggestionCard =
+  | { type: "exam-alert"; examId: string; dismissedUntil?: number }
+  | { type: "schedule-suggestion"; examId: string; session: StudySession }
+  | { type: "upload-nudge"; examId: string };

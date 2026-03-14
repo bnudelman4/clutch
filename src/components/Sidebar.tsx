@@ -1,22 +1,25 @@
 "use client";
 
 import { useApp } from "@/lib/store";
+import { useExams } from "@/lib/exam-context";
 import { View } from "@/lib/types";
 
-const NAV_ITEMS: { id: View; label: string; icon: string; requiresData?: boolean; requiresFiles?: boolean }[] = [
+const NAV_ITEMS: { id: View; label: string; icon: string; requires?: "data" | "files" }[] = [
+  { id: "calendar", label: "CALENDAR", icon: "◰" },
   { id: "upload", label: "UPLOAD", icon: "↑" },
-  { id: "content", label: "CONTENT", icon: "◲", requiresFiles: true },
-  { id: "ledger", label: "TOPIC LEDGER", icon: "▦", requiresData: true },
-  { id: "flashcards", label: "FLASHCARDS", icon: "◫", requiresData: true },
-  { id: "audit", label: "PRE-FLIGHT AUDIT", icon: "✓", requiresData: true },
-  { id: "workflow", label: "WORKFLOW", icon: "⎇", requiresData: true },
-  { id: "calendar", label: "CALENDAR", icon: "◰", requiresData: true },
+  { id: "content", label: "CONTENT", icon: "◲", requires: "files" },
+  { id: "ledger", label: "TOPIC LEDGER", icon: "▦", requires: "data" },
+  { id: "flashcards", label: "FLASHCARDS", icon: "◫", requires: "data" },
+  { id: "audit", label: "PRE-FLIGHT AUDIT", icon: "✓", requires: "data" },
+  { id: "workflow", label: "WORKFLOW", icon: "⎇", requires: "data" },
 ];
 
 export default function Sidebar() {
   const { state, dispatch } = useApp();
-  const hasData = !!state.analysisResult;
-  const hasFiles = state.uploadedFiles.length > 0;
+  const { currentExam } = useExams();
+
+  const hasData = !!(currentExam && currentExam.topics.length > 0);
+  const hasFiles = !!(currentExam && currentExam.uploadedFiles.length > 0);
 
   return (
     <aside className="w-60 h-screen bg-surface border-r border-border flex flex-col shrink-0">
@@ -33,8 +36,8 @@ export default function Sidebar() {
         {NAV_ITEMS.map((item) => {
           const isActive = state.view === item.id;
           const isDisabled =
-            (item.requiresData && !hasData) ||
-            (item.requiresFiles && !hasFiles);
+            (item.requires === "data" && !hasData) ||
+            (item.requires === "files" && !hasFiles);
 
           return (
             <button
