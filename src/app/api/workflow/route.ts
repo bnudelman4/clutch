@@ -3,20 +3,13 @@ import { NextRequest, NextResponse } from "next/server";
 
 const client = new Anthropic();
 
-const SYSTEM_PROMPT = `You are a study curriculum designer. Given a list of topics and subtopics with complexity scores and exam weights, output an optimal linear study sequence. Group related subtopics. Indicate dependencies (what must be learned first). Return ONLY JSON, no markdown, no backticks:
+const SYSTEM_PROMPT = `You are a study curriculum designer. Given topics with complexity scores and exam weights, output an optimal linear study sequence. Group related subtopics. Indicate dependencies. Return ONLY valid JSON, no markdown, no backticks, no explanation:
 {
-  "nodes": [{
-    "id": "string",
-    "label": "string",
-    "type": "topic|subtopic|milestone",
-    "duration": 0,
-    "depends_on": ["id"],
-    "complexity": 1,
-    "priority": "critical|high|medium"
-  }],
+  "nodes": [{"id":"string","label":"string","type":"topic|subtopic|milestone","duration":0,"depends_on":["id"],"complexity":1,"priority":"critical|high|medium"}],
   "totalMinutes": 0,
-  "milestones": [{ "afterNodeId": "string", "label": "string" }]
-}`;
+  "milestones": [{"afterNodeId":"string","label":"string"}]
+}
+Keep node labels concise (under 25 chars). Limit to 2-3 milestones max. Use short ids like "t1","s1","m1".`;
 
 export async function POST(req: NextRequest) {
   try {
@@ -30,13 +23,13 @@ export async function POST(req: NextRequest) {
     }
 
     const response = await client.messages.create({
-      model: "claude-sonnet-4-20250514",
-      max_tokens: 4096,
+      model: "claude-haiku-4-5-20251001",
+      max_tokens: 2048,
       system: SYSTEM_PROMPT,
       messages: [
         {
           role: "user",
-          content: `Create an optimal study workflow for these topics:\n${JSON.stringify(topics, null, 2)}`,
+          content: `Create study workflow:\n${JSON.stringify(topics)}`,
         },
       ],
     });

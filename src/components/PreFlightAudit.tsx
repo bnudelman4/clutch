@@ -3,7 +3,7 @@
 import { useExams } from "@/lib/exam-context";
 import { useApp } from "@/lib/store";
 import ExamSwitcher from "./ExamSwitcher";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useCallback } from "react";
 
 const OPTION_LABELS = ["A", "B", "C", "D"];
 
@@ -28,12 +28,6 @@ export default function PreFlightAudit() {
       setCompleted(true);
     }
   }, [currentQ, auditQuestions]);
-
-  useEffect(() => {
-    if (!answered) return;
-    const timer = setTimeout(advanceToNext, 1500);
-    return () => clearTimeout(timer);
-  }, [answered, advanceToNext]);
 
   if (!currentExam || !auditQuestions || auditQuestions.length === 0) {
     return (
@@ -127,10 +121,18 @@ export default function PreFlightAudit() {
             })}
           </div>
           {answered && (
-            <div className="mt-4 p-4 bg-surface border border-border rounded-lg">
-              <div className="font-mono text-[10px] tracking-[0.15em] text-muted mb-2">EXPLANATION</div>
-              <p className="font-mono text-sm text-white/80 leading-relaxed">{question.explanation}</p>
-            </div>
+            <>
+              <div className="mt-4 p-4 bg-surface border border-border rounded-lg">
+                <div className="font-mono text-[10px] tracking-[0.15em] text-muted mb-2">EXPLANATION</div>
+                <p className="font-mono text-sm text-white/80 leading-relaxed">{question.explanation}</p>
+              </div>
+              <button
+                onClick={advanceToNext}
+                className="mt-4 w-full py-3 border border-accent text-accent font-mono text-xs tracking-wider rounded-lg hover:bg-accent/10 transition-colors"
+              >
+                {currentQ < auditQuestions.length - 1 ? "Next Question →" : "See Results →"}
+              </button>
+            </>
           )}
         </div>
       </div>

@@ -5,77 +5,140 @@ import { useExams } from "@/lib/exam-context";
 import ExamSwitcher from "./ExamSwitcher";
 import { useState, useRef, useCallback } from "react";
 
+const MAX_FILES = 20;
+
+interface QueueItem {
+  file: File;
+  status: "queued" | "processing" | "done" | "error";
+  error?: string;
+}
+
+function formatSize(bytes: number) {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
 export default function UploadView() {
   const { dispatch } = useApp();
-  const { currentExam, exams, addExam, addFileToExam, setAnalysisResult } = useExams();
+  const { currentExam, exams, addFileToExam, setAnalysisResult } = useExams();
   const [dragOver, setDragOver] = useState(false);
   const [pasteText, setPasteText] = useState("");
   const [error, setError] = useState("");
+  const [queue, setQueue] = useState<QueueItem[]>([]);
+  const [processing, setProcessing] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Nudge cards for exams without uploads
   const nudgeExams = exams.filter((e) => e.uploadedFiles.length === 0 && e.topics.length === 0);
+  const currentFileCount = currentExam?.uploadedFiles.length || 0;
 
-  const processFile = useCallback(
-    async (file: File) => {
-      if (!currentExam) return;
-      setError("");
+  const processQueue = useCallback(
+    async (items: QueueItem[]) => {
+      if (!currentExam || processing) return;
+      setProcessing(true);
       dispatch({ type: "SET_ANALYZING", isAnalyzing: true });
 
-      try {
-        const blobUrl = URL.createObjectURL(file);
-        addFileToExam(currentExam.id, { name: file.name, blobUrl, type: file.type });
+      for (let i = 0; i < items.length; i++) {
+        const item = items[i];
+        if (item.status !== "queued") continue;
 
-        const arrayBuffer = await file.arrayBuffer();
-        const base64 = btoa(
-          new Uint8Array(arrayBuffer).reduce(
-            (data, byte) => data + String.fromCharCode(byte),
-            ""
-          )
+        setQueue((prev) =>
+          prev.map((q, idx) => (idx === i ? { ...q, status: "processing" as const } : q))
         );
 
-        let body: Record<string, string>;
-        if (file.type === "application/pdf") {
-          body = { fileBase64: base64, fileType: file.type, fileName: file.name };
-        } else {
-          const text = await file.text();
-          body = { text, fileName: file.name };
+        try {
+          const blobUrl = URL.createObjectURL(item.file);
+          addFileToExam(currentExam.id, { name: item.file.name, blobUrl, type: item.file.type });
+
+          const arrayBuffer = await item.file.arrayBuffer();
+          const base64 = btoa(
+            new Uint8Array(arrayBuffer).reduce(
+              (data, byte) => data + String.fromCharCode(byte),
+              ""
+            )
+          );
+
+          let body: Record<string, string>;
+          if (item.file.type === "application/pdf") {
+            body = { fileBase64: base64, fileType: item.file.type, fileName: item.file.name };
+          } else {
+            const text = await item.file.text();
+            body = { text, fileName: item.file.name };
+          }
+
+          const res = await fetch("/api/analyze", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(body),
+          });
+
+          if (!res.ok) {
+            const err = await res.json();
+            throw new Error(err.error || "Analysis failed");
+          }
+
+          const result = await res.json();
+          setAnalysisResult(currentExam.id, result);
+
+          setQueue((prev) =>
+            prev.map((q, idx) => (idx === i ? { ...q, status: "done" as const } : q))
+          );
+        } catch (e) {
+          setQueue((prev) =>
+            prev.map((q, idx) =>
+              idx === i
+                ? { ...q, status: "error" as const, error: e instanceof Error ? e.message : "Failed" }
+                : q
+            )
+          );
         }
-
-        const res = await fetch("/api/analyze", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(body),
-        });
-
-        if (!res.ok) {
-          const err = await res.json();
-          throw new Error(err.error || "Analysis failed");
-        }
-
-        const result = await res.json();
-        setAnalysisResult(currentExam.id, result);
-        dispatch({ type: "SET_ANALYZING", isAnalyzing: false });
-        dispatch({ type: "SET_STATUS", status: `LOADED: ${file.name}` });
-        dispatch({ type: "SET_VIEW", view: "ledger" });
-      } catch (e) {
-        setError(e instanceof Error ? e.message : "Upload failed");
-        dispatch({ type: "SET_ANALYZING", isAnalyzing: false });
-        dispatch({ type: "SET_STATUS", status: "ERROR" });
       }
+
+      setProcessing(false);
+      dispatch({ type: "SET_ANALYZING", isAnalyzing: false });
+      dispatch({ type: "SET_STATUS", status: `PROCESSED: ${items.length} file(s)` });
     },
-    [currentExam, dispatch, addFileToExam, setAnalysisResult]
+    [currentExam, processing, dispatch, addFileToExam, setAnalysisResult]
+  );
+
+  const addFiles = useCallback(
+    (files: FileList | File[]) => {
+      if (!currentExam) return;
+      const fileArray = Array.from(files);
+      const remaining = MAX_FILES - currentFileCount - queue.length;
+      if (remaining <= 0) {
+        setError(`Maximum ${MAX_FILES} files per exam. Remove some files first.`);
+        return;
+      }
+      const toAdd = fileArray.slice(0, remaining);
+      if (toAdd.length < fileArray.length) {
+        setError(`Only ${toAdd.length} of ${fileArray.length} files added (max ${MAX_FILES}).`);
+      } else {
+        setError("");
+      }
+      const newItems: QueueItem[] = toAdd.map((f) => ({ file: f, status: "queued" }));
+      const updatedQueue = [...queue, ...newItems];
+      setQueue(updatedQueue);
+      processQueue(updatedQueue);
+    },
+    [currentExam, currentFileCount, queue, processQueue]
   );
 
   const handleDrop = useCallback(
     (e: React.DragEvent) => {
       e.preventDefault();
       setDragOver(false);
-      const file = e.dataTransfer.files[0];
-      if (file) processFile(file);
+      if (e.dataTransfer.files.length > 0) addFiles(e.dataTransfer.files);
     },
-    [processFile]
+    [addFiles]
   );
+
+  const removeFromQueue = (idx: number) => {
+    setQueue((prev) => prev.filter((_, i) => i !== idx));
+  };
+
+  const doneCount = queue.filter((q) => q.status === "done").length;
+  const totalCount = queue.length;
 
   const handlePasteSubmit = async () => {
     if (!pasteText.trim() || !currentExam) return;
@@ -110,7 +173,7 @@ export default function UploadView() {
     <div className="flex-1 flex flex-col overflow-hidden">
       <ExamSwitcher />
 
-      <div className="flex-1 flex items-center justify-center p-8 overflow-auto">
+      <div className="flex-1 flex items-start justify-center p-8 overflow-auto">
         <div className="w-full max-w-2xl space-y-6">
           {!currentExam && (
             <div className="p-4 border border-amber/30 rounded-lg bg-amber/5 mb-4">
@@ -126,6 +189,9 @@ export default function UploadView() {
               <span className="text-white">
                 {currentExam.subjectName} — {currentExam.examType}
               </span>
+              <span className="ml-3 text-muted/60">
+                {currentFileCount}/{MAX_FILES} FILES
+              </span>
             </div>
           )}
 
@@ -134,7 +200,7 @@ export default function UploadView() {
               Upload Study Material
             </h2>
             <p className="font-mono text-muted text-xs tracking-wider mt-2">
-              PDF, PPTX, DOCX, OR TXT — DROP OR CLICK TO SELECT
+              PDF, PPTX, DOCX, OR TXT — DROP OR SELECT MULTIPLE FILES (MAX {MAX_FILES})
             </p>
           </div>
 
@@ -168,7 +234,7 @@ export default function UploadView() {
             onDragLeave={() => setDragOver(false)}
             onDrop={handleDrop}
             onClick={() => currentExam && fileInputRef.current?.click()}
-            className={`border-2 border-dashed rounded-lg p-16 text-center transition-colors ${
+            className={`border-2 border-dashed rounded-lg p-12 text-center transition-colors ${
               !currentExam
                 ? "border-border/50 opacity-50 cursor-not-allowed"
                 : dragOver
@@ -178,22 +244,87 @@ export default function UploadView() {
           >
             <div className="font-mono text-accent text-4xl mb-4">↑</div>
             <p className="font-mono text-muted text-sm">
-              Drop file here or click to browse
+              Drop files here or click to browse
             </p>
             <p className="font-mono text-muted/50 text-xs mt-2">
-              PDF • PPTX • DOCX • TXT
+              PDF • PPTX • DOCX • TXT • Multiple files supported
             </p>
             <input
               ref={fileInputRef}
               type="file"
               accept=".pdf,.pptx,.docx,.txt"
+              multiple
               className="hidden"
               onChange={(e) => {
-                const file = e.target.files?.[0];
-                if (file) processFile(file);
+                if (e.target.files && e.target.files.length > 0) addFiles(e.target.files);
+                e.target.value = "";
               }}
             />
           </div>
+
+          {/* Upload queue */}
+          {queue.length > 0 && (
+            <div className="bg-surface border border-border rounded-lg overflow-hidden">
+              <div className="flex items-center justify-between px-4 py-3 border-b border-border">
+                <div className="font-mono text-[10px] tracking-wider text-muted">
+                  UPLOAD QUEUE
+                </div>
+                <div className="font-mono text-xs text-white">
+                  {doneCount}/{totalCount} processed
+                </div>
+              </div>
+              {/* Progress bar */}
+              {totalCount > 0 && (
+                <div className="h-1 bg-border">
+                  <div
+                    className="h-full bg-accent transition-all"
+                    style={{ width: `${(doneCount / totalCount) * 100}%` }}
+                  />
+                </div>
+              )}
+              <div className="divide-y divide-border/50">
+                {queue.map((item, i) => (
+                  <div key={i} className="flex items-center gap-3 px-4 py-2">
+                    <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                      item.status === "done" ? "bg-accent" :
+                      item.status === "processing" ? "bg-amber animate-pulse" :
+                      item.status === "error" ? "bg-danger" : "bg-muted/30"
+                    }`} />
+                    <div className="flex-1 min-w-0">
+                      <div className="font-mono text-xs text-white truncate">{item.file.name}</div>
+                      <div className="font-mono text-[10px] text-muted">
+                        {formatSize(item.file.size)}
+                        {item.status === "processing" && " • Analyzing..."}
+                        {item.status === "done" && " • Done"}
+                        {item.status === "error" && ` • ${item.error}`}
+                      </div>
+                    </div>
+                    {(item.status === "queued" || item.status === "error") && (
+                      <button
+                        onClick={() => removeFromQueue(i)}
+                        className="font-mono text-xs text-muted hover:text-white"
+                      >
+                        ✕
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+              {doneCount === totalCount && totalCount > 0 && (
+                <div className="px-4 py-3 border-t border-border">
+                  <button
+                    onClick={() => {
+                      setQueue([]);
+                      dispatch({ type: "SET_VIEW", view: "ledger" });
+                    }}
+                    className="w-full py-2 border border-accent text-accent font-mono text-xs tracking-wider rounded hover:bg-accent/10 transition-colors"
+                  >
+                    VIEW RESULTS →
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
 
           <div className="relative">
             <div className="absolute inset-0 flex items-center">

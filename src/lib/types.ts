@@ -88,6 +88,9 @@ export interface GoogleEvent {
   summary: string;
   start: { dateTime?: string; date?: string };
   end: { dateTime?: string; date?: string };
+  calendarId?: string;
+  calendarName?: string;
+  colorId?: string;
 }
 
 export const EXAM_COLORS = [

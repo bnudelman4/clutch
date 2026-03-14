@@ -69,6 +69,7 @@ export default function TopicLedger() {
         </h2>
         <p className="font-mono text-muted text-xs tracking-wider mb-6">
           {topics.length} TOPICS, {totalSubtopics} SUBTOPICS
+          {currentExam.uploadedFiles.length > 0 && ` • ${currentExam.uploadedFiles.length} FILE${currentExam.uploadedFiles.length > 1 ? "S" : ""} ANALYZED`}
         </p>
 
         <div className="grid grid-cols-4 gap-4 mb-8">

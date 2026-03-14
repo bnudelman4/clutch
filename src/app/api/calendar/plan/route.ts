@@ -3,20 +3,31 @@ import { NextRequest, NextResponse } from "next/server";
 
 const client = new Anthropic();
 
-const SYSTEM_PROMPT = `You are an academic study planner. Given a list of calendar events and an exam date, identify all free time blocks (minimum 30 minutes). Then create an optimal study schedule working backwards from the exam. Prioritize longer sessions earlier, shorter review sessions closer to exam. Return ONLY JSON, no markdown, no backticks:
+const SYSTEM_PROMPT = `You are an academic study planner. Given calendar events, exam details, and topics with complexity scores, create an optimal study schedule.
+
+CONSTRAINTS:
+- Sessions start no earlier than 10:00 AM, end no later than 11:00 PM
+- Skip any block already occupied by an existing event (check for overlap)
+- Minimum session length: 30 minutes
+- Prioritize higher-weight and higher-complexity topics
+- Work backwards from the exam date — heavier "deep-study" sessions earlier, lighter "review" sessions closer to exam
+- If there is not enough time to cover all topics, mark lower-priority ones as sacrificed
+
+Return ONLY JSON, no markdown, no backticks:
 {
-  "studySessions": [{
+  "sessions": [{
     "date": "YYYY-MM-DD",
     "startTime": "HH:MM",
     "endTime": "HH:MM",
     "durationMinutes": 0,
-    "focus": "topic name",
-    "intensity": "deep|review|light",
-    "notes": "what to cover"
+    "title": "topic or subtopic name",
+    "notes": "what specifically to cover",
+    "type": "deep-study|review|light",
+    "priority": "critical|high|medium"
   }],
+  "sacrificed": [{ "topicName": "name", "reason": "why it was cut" }],
   "summary": "one sentence overview of the plan",
-  "totalStudyHours": 0,
-  "daysUntilExam": 0
+  "totalHours": 0
 }`;
 
 export async function POST(req: NextRequest) {
@@ -32,8 +43,10 @@ export async function POST(req: NextRequest) {
 
     const topicsList = topics
       ?.sort((a: { examWeight: number }, b: { examWeight: number }) => b.examWeight - a.examWeight)
-      .map((t: { name: string; examWeight: number }) => `${t.name} (weight: ${t.examWeight}%)`)
-      .join(", ") || "General review";
+      .map((t: { name: string; examWeight: number; complexityScore: number; subtopics?: { name: string; importance: string }[] }) =>
+        `${t.name} (weight: ${t.examWeight}%, complexity: ${t.complexityScore}/10${t.subtopics?.length ? `, subtopics: ${t.subtopics.map(s => `${s.name} [${s.importance}]`).join(", ")}` : ""})`
+      )
+      .join("\n") || "General review";
 
     const response = await client.messages.create({
       model: "claude-sonnet-4-20250514",
@@ -42,7 +55,7 @@ export async function POST(req: NextRequest) {
       messages: [
         {
           role: "user",
-          content: `Calendar events: ${JSON.stringify(events || [])}\nExam: ${examSubject} on ${examDateTime}\nTopics to cover (by priority): ${topicsList}`,
+          content: `Existing calendar events (DO NOT schedule over these):\n${JSON.stringify(events || [])}\n\nExam: ${examSubject} on ${examDateTime}\n\nTopics to cover (by priority):\n${topicsList}`,
         },
       ],
     });
