@@ -4,15 +4,24 @@ import { NextRequest, NextResponse } from "next/server";
 const client = new Anthropic();
 
 const SYSTEM_PROMPT = `You are an Academic Intelligence Engine. Analyze the provided study material.
-1. Identify core topics based on heading density, repetition, and weighting.
+1. Identify core topics based on heading density, repetition, and weighting. For each topic, identify 2-4 subtopics with importance levels.
 2. Assign a Complexity Score (1-10) based on technical terminology density.
 3. Generate 10 high-yield flashcards focused on definitions and key concepts.
-4. Create 5 audit questions that test APPLICATION, not just recall.
+4. Create 5 audit questions that test APPLICATION, not just recall. Each question must have 4 multiple-choice options where wrong answers are common misconceptions (not obviously wrong).
 CRITICAL: Return ONLY a JSON object, no markdown, no backticks:
 {
-  "topics": [{ "name": "", "summary": "", "examWeight": 0, "complexityScore": 0, "pageNumber": 0 }],
+  "topics": [{
+    "name": "", "summary": "", "examWeight": 0, "complexityScore": 0, "pageNumber": 0,
+    "subtopics": [{ "name": "", "description": "", "importance": "high|medium|low", "pageNumber": 0 }]
+  }],
   "flashcards": [{ "front": "", "back": "", "sourcePageNumber": 0 }],
-  "auditQuestions": [{ "question": "", "correctAnswer": "", "sourcePageNumber": 0 }]
+  "auditQuestions": [{
+    "question": "",
+    "options": ["A answer", "B answer", "C answer", "D answer"],
+    "correctIndex": 0,
+    "explanation": "Why the correct answer is right and common misconceptions",
+    "sourcePageNumber": 0
+  }]
 }`;
 
 export async function POST(req: NextRequest) {

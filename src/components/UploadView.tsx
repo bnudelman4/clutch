@@ -3,13 +3,6 @@
 import { useApp } from "@/lib/store";
 import { useState, useRef, useCallback } from "react";
 
-const ACCEPTED_TYPES = [
-  "application/pdf",
-  "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-  "text/plain",
-];
-
 export default function UploadView() {
   const { dispatch } = useApp();
   const [dragOver, setDragOver] = useState(false);
@@ -23,10 +16,11 @@ export default function UploadView() {
       dispatch({ type: "SET_ANALYZING", isAnalyzing: true });
 
       try {
-        if (file.type === "application/pdf") {
-          const blobUrl = URL.createObjectURL(file);
-          dispatch({ type: "SET_PDF_BLOB", url: blobUrl });
-        }
+        const blobUrl = URL.createObjectURL(file);
+        dispatch({
+          type: "ADD_FILE",
+          file: { name: file.name, blobUrl, type: file.type },
+        });
 
         const arrayBuffer = await file.arrayBuffer();
         const base64 = btoa(

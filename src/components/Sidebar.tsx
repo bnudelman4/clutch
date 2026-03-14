@@ -3,16 +3,20 @@
 import { useApp } from "@/lib/store";
 import { View } from "@/lib/types";
 
-const NAV_ITEMS: { id: View; label: string; icon: string }[] = [
+const NAV_ITEMS: { id: View; label: string; icon: string; requiresData?: boolean; requiresFiles?: boolean }[] = [
   { id: "upload", label: "UPLOAD", icon: "↑" },
-  { id: "ledger", label: "TOPIC LEDGER", icon: "▦" },
-  { id: "flashcards", label: "FLASHCARDS", icon: "◫" },
-  { id: "audit", label: "PRE-FLIGHT AUDIT", icon: "✓" },
+  { id: "content", label: "CONTENT", icon: "◲", requiresFiles: true },
+  { id: "ledger", label: "TOPIC LEDGER", icon: "▦", requiresData: true },
+  { id: "flashcards", label: "FLASHCARDS", icon: "◫", requiresData: true },
+  { id: "audit", label: "PRE-FLIGHT AUDIT", icon: "✓", requiresData: true },
+  { id: "workflow", label: "WORKFLOW", icon: "⎇", requiresData: true },
+  { id: "calendar", label: "CALENDAR", icon: "◰", requiresData: true },
 ];
 
 export default function Sidebar() {
   const { state, dispatch } = useApp();
   const hasData = !!state.analysisResult;
+  const hasFiles = state.uploadedFiles.length > 0;
 
   return (
     <aside className="w-60 h-screen bg-surface border-r border-border flex flex-col shrink-0">
@@ -28,7 +32,9 @@ export default function Sidebar() {
       <nav className="flex-1 py-3">
         {NAV_ITEMS.map((item) => {
           const isActive = state.view === item.id;
-          const isDisabled = item.id !== "upload" && !hasData;
+          const isDisabled =
+            (item.requiresData && !hasData) ||
+            (item.requiresFiles && !hasFiles);
 
           return (
             <button
